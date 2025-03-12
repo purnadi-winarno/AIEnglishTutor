@@ -1,6 +1,7 @@
+const {getDefaultConfig} = require('@react-native/metro-config');
 const {
-    wrapWithReanimatedMetroConfig,
-  } = require('react-native-reanimated/metro-config');
+  wrapWithReanimatedMetroConfig,
+} = require('react-native-reanimated/metro-config');
 
 /**
  * Metro configuration
@@ -8,6 +9,14 @@ const {
  *
  * @type {import('@react-native/metro-config').MetroConfig}
  */
-const config = {};
+const config = {
+  ...getDefaultConfig(__dirname),
+  resolver: {
+    extraNodeModules: {
+      '@screens': `${__dirname}/src/screens`,
+    },
+    assetExts: ['png', 'jpg', 'jpeg', 'gif'],
+  },
+};
 
 module.exports = wrapWithReanimatedMetroConfig(config);
