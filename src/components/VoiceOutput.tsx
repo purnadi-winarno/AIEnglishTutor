@@ -1,25 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Tts from 'react-native-tts';
 
 interface VoiceOutputProps {
   text: string;
   translation?: string;
+  shouldSpeak: boolean;
 }
 
-const VoiceOutput: React.FC<VoiceOutputProps> = ({ text, translation }) => {
-  const speak = async () => {
-    try {
-      await Tts.speak(text);
-    } catch (e) {
-      console.error(e);
+const VoiceOutput: React.FC<VoiceOutputProps> = ({ text, translation, shouldSpeak }) => {
+  useEffect(() => {
+    if (shouldSpeak) {
+      Tts.speak(text);
     }
-  };
-
-  React.useEffect(() => {
-    Tts.setDefaultLanguage('en-US');
-    speak();
-  }, [text]);
+  }, [text, shouldSpeak]);
 
   return (
     <View style={styles.container}>

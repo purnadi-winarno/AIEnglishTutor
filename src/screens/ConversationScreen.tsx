@@ -14,6 +14,7 @@ interface Message {
   text: string;
   isUser: boolean;
   translation?: string;
+  shouldSpeak: boolean;
 }
 
 const ConversationScreen = () => {
@@ -21,8 +22,12 @@ const ConversationScreen = () => {
   const { getAIResponse, loading, error } = useAIResponse();
 
   const handleSpeechResult = async (text: string) => {
-    // Add user message
-    setMessages(prev => [...prev, { text, isUser: true }]);
+    // Add user message without voice output
+    setMessages(prev => [...prev, { 
+      text, 
+      isUser: true,
+      shouldSpeak: false
+    }]);
 
     // Get AI response
     const response = await getAIResponse(text);
@@ -30,7 +35,8 @@ const ConversationScreen = () => {
       setMessages(prev => [...prev, {
         text: response.correctedEnglish,
         translation: response.explanation,
-        isUser: false
+        isUser: false,
+        shouldSpeak: true
       }]);
     }
   };
@@ -43,6 +49,7 @@ const ConversationScreen = () => {
             <VoiceOutput
               text={message.text}
               translation={message.translation}
+              shouldSpeak={message.shouldSpeak}
             />
           </View>
         ))}
