@@ -18,7 +18,7 @@ interface Message {
 
 const ConversationScreen = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const { getAIResponse, loading } = useAIResponse();
+  const { getAIResponse, loading, error } = useAIResponse();
 
   const handleSpeechResult = async (text: string) => {
     // Add user message
@@ -47,7 +47,9 @@ const ConversationScreen = () => {
           </View>
         ))}
       </ScrollView>
-      <Text>Hello</Text>
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
       <VoiceInput onSpeechResult={handleSpeechResult} />
     </SafeAreaView>
   );
@@ -69,6 +71,12 @@ const styles = StyleSheet.create({
   aiMessage: {
     alignSelf: 'flex-start',
     maxWidth: '80%',
+  },
+  errorText: {
+    color: 'red',
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 14,
   },
 });
 
