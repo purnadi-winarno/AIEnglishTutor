@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { SYSTEM_PROMPT, API_CONFIG } from './aiConfig';
+import { useChatStore } from '../store/chatStore';
 
 interface AIResponse {
   correctedEnglish: string;
@@ -13,96 +15,89 @@ interface OpenAIError {
   };
 }
 
-const API_URL = 'https://api.openai.com/v1/chat/completions';
-// const MODEL = 'gpt-3.5-turbo';
-const MODEL = 'gpt-4o-mini';
-
-const getErrorMessage = (error: any): string => {
-  if (error?.message?.includes('quota')) {
-    return 'OpenAI API quota exceeded. Please try again later or contact support.';
-  }
-  if (error?.message?.includes('API key')) {
-    return 'Invalid API key. Please check your configuration.';
-  }
-  return 'An error occurred while processing your request. Please try again.';
-};
+// Update the API URLs
+const API_BASE = 'https://api.openai.com/v1';
 
 export const useAIResponse = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { 
+    assistantId, 
+    threadId, 
+    setAssistantId, 
+    setThreadId,
+    addMessage
+  } = useChatStore();
+
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        if (!assistantId) {
+          setAssistantId('default-assistant');
+        }
+        if (!threadId) {
+          setThreadId(`thread-${Date.now()}`);
+        }
+      } catch (e) {
+        console.error('Error initializing:', e);
+        setError('Failed to initialize chat');
+      }
+    };
+
+    initialize();
+  }, [assistantId, threadId, setAssistantId, setThreadId]);
 
   const getAIResponse = useCallback(async (userInput: string): Promise<AIResponse | null> => {
+    if (!assistantId || !threadId) {
+      setError('Chat not initialized');
+      return null;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      console.log('process.env.OPENAI_API_KEY: ', process.env.OPENAI_API_KEY);
+      addMessage({ text: userInput, isUser: true });
 
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error('OpenAI API key is not configured');
-      }
-
-      if (!userInput.trim()) {
-        throw new Error('Input is empty');
-      }
-      
-      const completion = await fetch(API_URL, {
+      const completion = await fetch(`${API_BASE}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'assistants=v1'
         },
         body: JSON.stringify({
-          model: MODEL,
+          model: API_CONFIG.model,
           messages: [
             {
               role: "system",
-              content: `You are a friendly English tutor having a conversation with the user. Follow these rules:
-
-1. Engage naturally in English conversations with the user
-2. If the user makes grammar or contextual mistakes, provide corrections focusing only on:
-   - Word choice
-   - Word order
-   - Tense usage
-   - Subject-verb agreement
-   - Singular/plural forms
-   DO NOT correct punctuation or capitalization as the input comes from voice recognition
-3. If the user speaks in Indonesian, respond in Indonesian, except for English-specific terms or examples
-4. For corrections, format your response as:
-   - Original: [user's sentence]
-   - Improved: [corrected sentence]
-   - Penjelasan: [explanation in Indonesian]
-5. Keep the conversation friendly and encouraging`
+              content: API_CONFIG.instructions
             },
             {
               role: "user",
               content: userInput.trim()
             }
-          ],
-          temperature: 0.7,
-          max_tokens: 150,
-          top_p: 1,
-          frequency_penalty: 0,
-          presence_penalty: 0
+          ]
         }),
       });
 
       if (!completion.ok) {
-        const errorData = await completion.json() as OpenAIError;
-        throw new Error(errorData.error?.message || `HTTP error! status: ${completion.status}`);
+        throw new Error(`HTTP error! status: ${completion.status}`);
       }
 
       const response = await completion.json();
-      
-      if (!response.choices?.[0]?.message?.content) {
-        throw new Error('Invalid response format from OpenAI');
-      }
+      const aiMessage = response.choices[0]?.message?.content || '';
+
+      addMessage({
+        text: aiMessage,
+        isUser: false,
+        translation: ''
+      });
 
       return {
-        correctedEnglish: response.choices[0].message.content,
-        explanation: response.choices[1]?.message?.content || 'No explanation provided'
+        correctedEnglish: aiMessage,
+        explanation: ''
       };
+
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       setError(errorMessage);
@@ -111,7 +106,43 @@ export const useAIResponse = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [assistantId, threadId, addMessage]);
 
-  return { getAIResponse, loading, error };
+  // Add function to clear conversation
+  const clearConversation = useCallback(async () => {
+    if (assistantId) {
+      // Create new thread
+      const threadResponse = await fetch(`${API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: API_CONFIG.model,
+          messages: [
+            {
+              role: "system",
+              content: API_CONFIG.instructions
+            }
+          ]
+        }),
+      });
+
+      const thread = await threadResponse.json();
+      setThreadId(thread.id);
+    }
+  }, [assistantId, setThreadId]);
+
+  return { getAIResponse, loading, error, clearConversation };
 };
+
+function getErrorMessage(error: any): string {
+  if (error?.message?.includes('quota')) {
+    return 'OpenAI API quota exceeded. Please try again later or contact support.';
+  }
+  if (error?.message?.includes('API key')) {
+    return 'Invalid API key. Please check your configuration.';
+  }
+  return 'An error occurred while processing your request. Please try again.';
+}

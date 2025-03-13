@@ -1,55 +1,51 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
   SafeAreaView,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import VoiceInput from '../components/VoiceInput';
 import VoiceOutput from '../components/VoiceOutput';
 import { useAIResponse } from '../utils/aiService';
-
-interface Message {
-  text: string;
-  isUser: boolean;
-  translation?: string;
-  shouldSpeak: boolean;
-}
+import { useChatStore } from '../store/chatStore';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const ConversationScreen = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, clearChat } = useChatStore();
   const { getAIResponse, loading, error } = useAIResponse();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const handleSpeechResult = async (text: string) => {
-    // Add user message without voice output
-    setMessages(prev => [...prev, { 
-      text, 
-      isUser: true,
-      shouldSpeak: false
-    }]);
-
-    // Get AI response
-    const response = await getAIResponse(text);
-    if (response) {
-      setMessages(prev => [...prev, {
-        text: response.correctedEnglish,
-        translation: response.explanation,
-        isUser: false,
-        shouldSpeak: true
-      }]);
-    }
+    await getAIResponse(text);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.messagesContainer}>
-        {messages.map((message, index) => (
-          <View key={index} style={message.isUser ? styles.userMessage : styles.aiMessage}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Chat History</Text>
+        <TouchableOpacity onPress={clearChat} style={styles.clearButton}>
+          <Icon name="delete" size={24} color="#F44336" />
+        </TouchableOpacity>
+      </View>
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.messagesContainer}
+        onContentSizeChange={() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }}
+      >
+        {messages.map((message) => (
+          <View 
+            key={message.id} 
+            style={message.isUser ? styles.userMessage : styles.aiMessage}
+          >
             <VoiceOutput
               text={message.text}
               translation={message.translation}
-              shouldSpeak={message.shouldSpeak}
+              shouldSpeak={!message.isUser}
             />
           </View>
         ))}
@@ -57,7 +53,10 @@ const ConversationScreen = () => {
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}
-      <VoiceInput onSpeechResult={handleSpeechResult} />
+      <VoiceInput 
+        onSpeechResult={handleSpeechResult}
+        disabled={loading}
+      />
     </SafeAreaView>
   );
 };
@@ -66,6 +65,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  title: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  clearButton: {
+    padding: 8,
   },
   messagesContainer: {
     flex: 1,
